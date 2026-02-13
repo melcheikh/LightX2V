@@ -5,6 +5,7 @@ from pathlib import Path
 import torch
 from safetensors import safe_open
 
+from loguru import logger
 from lightx2v.utils.envs import *
 from lightx2v.utils.registry_factory import TENSOR_REGISTER
 from lightx2v_platform.base.global_var import AI_DEVICE
@@ -69,6 +70,7 @@ class DefaultTensor:
         self.pin_tensor = self._create_cpu_pin_tensor(tensor)
 
     def to_cuda(self, non_blocking=False):
+        logger.debug(f"DEBUG: to_cuda called for {self.tensor_name}")
         self.tensor = self.pin_tensor.to(AI_DEVICE, non_blocking=non_blocking)
 
     def to_cpu(self, non_blocking=False):
@@ -81,6 +83,7 @@ class DefaultTensor:
         if destination is None:
             destination = {}
         destination[self.tensor_name] = self.pin_tensor if hasattr(self, "pin_tensor") else self.tensor
+        logger.debug(f"DEBUG: DefaultTensor.state_dict: {self.tensor_name} in destination, pin={hasattr(self, 'pin_tensor')}")
         return destination
 
     def load_state_dict(self, destination, block_index, adapter_block_index=None):
@@ -89,9 +92,15 @@ class DefaultTensor:
             tensor_name = re.sub(r"\.\d+", lambda m: f".{adapter_block_index}", self.tensor_name, count=1)
         else:
             tensor_name = re.sub(r"\.\d+", lambda m: f".{block_index}", self.tensor_name, count=1)
+        
         if tensor_name not in destination:
+            logger.debug(f"DEBUG: DefaultTensor.load_state_dict: {tensor_name} NOT in destination. Keys: {list(destination.keys())[:5]}... total {len(destination)}")
+            print(f"DEBUG: DefaultTensor.load_state_dict: {tensor_name} NOT in destination.")
             self.tensor = None
             return
+        
+        logger.debug(f"DEBUG: DefaultTensor.load_state_dict: {tensor_name} FOUND in destination")
+        print(f"DEBUG: DefaultTensor.load_state_dict: {tensor_name} FOUND in destination")
         self.tensor = self.tensor_cuda_buffer.copy_(destination[tensor_name], non_blocking=True)
 
     def load_state_dict_from_disk(self, block_index, adapter_block_index=None):

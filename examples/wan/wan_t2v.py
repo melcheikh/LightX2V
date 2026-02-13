@@ -7,8 +7,8 @@ from lightx2v import LightX2VPipeline
 
 # Initialize pipeline for Wan2.1 T2V task
 pipe = LightX2VPipeline(
-    model_path="/path/to/Wan2.1-T2V-14B",
-    model_cls="wan2.1",
+    model_path="models/wan2.1_t2v_14b",
+    model_cls="wan2.1_distill",
     task="t2v",
 )
 

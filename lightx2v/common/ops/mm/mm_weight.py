@@ -576,7 +576,10 @@ class MMWeightQuantTemplate(MMWeightTemplate):
         m, n = x.shape
         x_view = x.view(m, -1, 128)
         x_amax = x_view.abs().float().amax(dim=2).view(m, -1).clamp(1e-4)
-        return (x_view * (448.0 / x_amax.unsqueeze(2))).to(torch.float8_e4m3fn).view(m, n), (x_amax / 448.0).view(m, -1)
+        res_quant = (x_view * (448.0 / x_amax.unsqueeze(2))).to(torch.float8_e4m3fn).view(m, n)
+        res_scale = (x_amax / 448.0).view(m, -1)
+        # print(f"DEBUG ACT QUANT: x={x.shape}, res_quant={res_quant.shape}, res_scale={res_scale.shape}")
+        return res_quant, res_scale
 
     def act_quant_fp8_perchannelgroup128_sym_sgl(self, x):
         m, k = x.shape
@@ -1586,7 +1589,11 @@ class MMWeightWfp8block128Afp8channelgroup128dynamicDeepgemmActSgl(MMWeightQuant
         )
         self.load_func = self.load_fp8_perblock128_sym
         self.weight_need_transpose = False
-        self.act_quant_func = self.act_quant_fp8_perchannelgroup128_sym_sgl
+        self.scale_force_fp32 = True
+        if sgl_kernel is not None:
+            self.act_quant_func = self.act_quant_fp8_perchannelgroup128_sym_sgl
+        else:
+            self.act_quant_func = self.act_quant_fp8_perchannelgroup128_sym_deepgemm
 
     def apply(self, input_tensor):
         shape = (input_tensor.shape[0], self.weight.shape[0])
@@ -1595,7 +1602,10 @@ class MMWeightWfp8block128Afp8channelgroup128dynamicDeepgemmActSgl(MMWeightQuant
         output_tensor = torch.empty(shape, dtype=dtype, device=device, requires_grad=False)
 
         input_tensor_quant, input_tensor_scale = self.act_quant_func(input_tensor)
-        deep_gemm.gemm_fp8_fp8_bf16_nt(
+        if not hasattr(self, "_logged_shapes"):
+            print(f"DEBUG GEMM: input_quant={input_tensor_quant.shape}, input_scale={input_tensor_scale.shape}, weight={self.weight.shape}, weight_scale={self.weight_scale.shape}, output={output_tensor.shape}")
+            self._logged_shapes = True
+        deep_gemm.fp8_gemm_nt(
             (input_tensor_quant, input_tensor_scale),
             (self.weight, self.weight_scale),
             output_tensor,

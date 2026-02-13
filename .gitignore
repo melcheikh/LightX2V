@@ -30,3 +30,14 @@ app/.gradio/
 *.pkl
 save_results/*
 *.egg-info/
+
+# LightX2V Specific
+models/
+*.safetensors
+*.gguf
+*.bin
+outputs/
+*.mp4
+*.png
+*.jpg
+

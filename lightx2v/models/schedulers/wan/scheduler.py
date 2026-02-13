@@ -26,6 +26,8 @@ class WanScheduler(BaseScheduler):
         self.noise_pred = None
         self.sample_guide_scale = self.config["sample_guide_scale"]
         self.caching_records_2 = [True] * self.config["infer_steps"]
+        if "dim" not in self.config: self.config["dim"] = 5120
+        if "num_heads" not in self.config: self.config["num_heads"] = 40
         self.head_size = self.config["dim"] // self.config["num_heads"]
 
     def prepare(self, seed, latent_shape, image_encoder_output=None):

@@ -275,29 +275,16 @@ class BaseTransformerModel(CompiledMethodsMixin, ABC):
         self.post_weight.remove_lora()
 
     def _load_safetensor_to_dict(self, file_path, unified_dtype, sensitive_layer):
-        """Load a safetensors file into a dictionary.
-
-        Args:
-            file_path: Path to safetensors file
-            unified_dtype: Whether to use unified dtype
-            sensitive_layer: Dictionary of sensitive layer patterns
-
-        Returns:
-            dict: Dictionary of tensors
-        """
+        from safetensors import safe_open
         remove_keys = self.remove_keys if hasattr(self, "remove_keys") else []
-
-        if self.device.type != "cpu" and dist.is_initialized():
-            device = dist.get_rank()
-        else:
-            device = str(self.device)
-
-        with safe_open(file_path, framework="pt", device=device) as f:
-            return {
-                key: (f.get_tensor(key).to(GET_DTYPE()) if unified_dtype or all(s not in key for s in sensitive_layer) else f.get_tensor(key).to(GET_SENSITIVE_DTYPE()))
-                for key in f.keys()
-                if not any(remove_key in key for remove_key in remove_keys)
-            }
+        with safe_open(file_path, framework="pt", device="cpu") as f:
+            weights_dict = {}
+            for key in f.keys():
+                if any(rem in key for rem in remove_keys): continue
+                t = f.get_tensor(key)
+                dtype = GET_DTYPE() if (unified_dtype or all(s not in key for s in sensitive_layer)) else GET_SENSITIVE_DTYPE()
+                weights_dict[key] = t.to(device="cpu", dtype=dtype)
+            return weights_dict
 
     def _load_ckpt(self, unified_dtype, sensitive_layer):
         """Load checkpoint weights.

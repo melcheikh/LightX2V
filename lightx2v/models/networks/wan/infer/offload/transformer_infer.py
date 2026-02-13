@@ -33,14 +33,21 @@ class WanOffloadTransformerInfer(WanTransformerInfer):
             if offload_granularity != "model":
                 self.offload_manager = WeightAsyncStreamManager(offload_granularity=offload_granularity)
             self.lazy_load = self.config.get("lazy_load", False)
-            if self.lazy_load and offload_granularity == "phase":
+            if self.lazy_load and offload_granularity in ["block", "phase"]:
                 self.offload_manager.init_lazy_load(num_workers=self.config.get("num_disk_workers", 4))
 
     def infer_with_blocks_offload(self, blocks, x, pre_infer_out):
         for block_idx in range(len(blocks)):
             self.block_idx = block_idx
+            if self.lazy_load:
+                next_prefetch = (block_idx + 1) % len(blocks)
+                self.offload_manager.start_prefetch_block(next_prefetch)
+
             if self.offload_manager.need_init_first_buffer:
                 self.offload_manager.init_first_buffer(blocks)
+
+            if self.lazy_load:
+                self.offload_manager.swap_cpu_buffers()
 
             self.offload_manager.prefetch_weights((block_idx + 1) % len(blocks), blocks)
             with torch_device_module.stream(self.offload_manager.compute_stream):

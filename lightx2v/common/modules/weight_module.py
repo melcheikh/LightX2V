@@ -1,3 +1,4 @@
+from loguru import logger
 class WeightModule:
     def __init__(self):
         self._modules = {}
@@ -73,11 +74,12 @@ class WeightModule:
     def load_state_dict(self, destination, block_index, adapter_block_index=None):
         if destination is None:
             destination = {}
-        for _, param in self._parameters.items():
+        for name, param in self._parameters.items():
             if param is not None:
                 param.load_state_dict(destination, block_index, adapter_block_index)
-        for _, module in self._modules.items():
+        for name, module in self._modules.items():
             if module is not None:
+                logger.debug(f"DEBUG: WeightModule.load_state_dict: processing module '{name}' of type {type(module)}")
                 module.load_state_dict(destination, block_index, adapter_block_index)
         return destination
 

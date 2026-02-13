@@ -530,6 +530,8 @@ class MultiModelStruct:
                         high_noise_model = build_wan_model_with_lora(WanModel, self.config, high_model_kwargs, lora_configs, model_type="high_noise_model")
                     high_noise_model.set_scheduler(self.scheduler)
                     self.model[0] = high_noise_model
+                    if self.config.get("cpu_offload", False) and self.config.get("offload_granularity", "block") == "model":
+                        self.to_cuda(0)
                     self.model[0].infer(inputs)
                 elif self.cur_model_index == 1:
                     lora_configs = self.config.get("lora_configs")
@@ -546,6 +548,8 @@ class MultiModelStruct:
                         low_noise_model = build_wan_model_with_lora(WanModel, self.config, low_model_kwargs, lora_configs, model_type="low_noise_model")
                     low_noise_model.set_scheduler(self.scheduler)
                     self.model[1] = low_noise_model
+                    if self.config.get("cpu_offload", False) and self.config.get("offload_granularity", "block") == "model":
+                        self.to_cuda(1)
                     self.model[1].infer(inputs)
 
     @ProfilingContext4DebugL2("Swtich models in infer_main costs")
@@ -572,10 +576,12 @@ class MultiModelStruct:
             self.cur_model_index = 1
 
     def offload_cpu(self, model_index):
-        self.model[model_index].to_cpu()
+        if self.model[model_index] is not None:
+            self.model[model_index].to_cpu()
 
     def to_cuda(self, model_index):
-        self.model[model_index].to_cuda()
+        if self.model[model_index] is not None:
+            self.model[model_index].to_cuda()
 
 
 @RUNNER_REGISTER("wan2.2_moe")
